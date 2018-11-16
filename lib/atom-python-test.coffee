@@ -15,10 +15,10 @@ module.exports = AtomPythonTest =
       default: ''
       title: 'Path of python executable. May be set if you have a setting that is not supported by the plugin default configuration. Example: /usr/bin/python3'
       order: 1
-    additionalArgs:
+    serviceName:
       type: 'string'
       default: ''
-      title: 'Additional arguments for pytest command line'
+      title: 'Name of the service to run tests against'
       order: 2
     executeDocTests:
       type: 'boolean'
@@ -71,6 +71,9 @@ module.exports = AtomPythonTest =
     else
       @atomPythonTestView.toggle()
 
+    stderr = (output) ->
+      console.log(output)
+
     stdout = (output) ->
       atomPythonTestView = AtomPythonTest.atomPythonTestView
       doColoring = atom.config.get('atom-python-test.outputColored')
@@ -106,20 +109,23 @@ module.exports = AtomPythonTest =
     if pythonExecutableDirectory and !!pythonExecutableDirectory
       command = pythonExecutableDirectory
     else
-      command = 'python'
+      command = 'docker'
 
-    console.log(command)
+    serviceName = atom.config.get('atom-python-test.serviceName')
 
-    args = ['-m', 'pytest', filePath, '--junit-xml=' + @testResultsFilename.name]
+    substrIdx = filePath.indexOf serviceName
+    modulePath = filePath.substr substrIdx+serviceName.length+1
 
-    if executeDocTests
-      args.push '--doctest-modules'
+    if modulePath.startsWith('src')
+      modulePath = modulePath.substr 4  # remove 'src/' before the module path
 
-    additionalArgs = atom.config.get('atom-python-test.additionalArgs')
-    if additionalArgs
-      args = args.concat additionalArgs.split " "
+    args = ['exec', '--env', 'PYTHONPATH=/service']
+    finalArgs = ['python', '-m', 'pytest', '-x', '-vv', "#{modulePath}"]
+    if serviceName
+      args = args.concat serviceName.split " "
+      args = args.concat finalArgs
 
-    process = new BufferedProcess({command, args, stdout, exit})
+    process = new BufferedProcess({command, args, stdout, exit, stderr})
 
 
   runTestUnderCursor: ->
